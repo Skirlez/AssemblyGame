@@ -1,0 +1,8 @@
+Debug/
+include/
+lib/
+Release/
+AssemblyGame.vcxproj.user
+AssemblyGame.vcxproj.filters
+
+.vs/

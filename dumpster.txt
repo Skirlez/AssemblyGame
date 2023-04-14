@@ -1,0 +1,42 @@
+this file includes code that didn't get used
+
+according to chatgpt, for a color that has rgb
+r = (g + b)
+b = (r + g)
+g = (r + b)
+produces a nice complementary color. it does mostly but sometimes produces colors which are too similar.
+    push 0
+    mov esi, 0
+    pushBackgroundColorsLoop:
+        mov eax, 0
+        mov ebx, 0
+        mov ecx, 0
+        mov edx, 0
+
+        push esi
+        mov ecx, 2
+        combineColorsLoop:
+            
+            inc esi
+            cmp esi, 2
+            setg dl
+            mov bl, dl
+            shl dl, 1
+            add dl, bl
+            sub esi, edx
+            
+            add al, [game_colors + esi]
+
+            loop combineColorsLoop
+
+        pop esi
+        mov bl, 255
+        sub bl, al
+        push ebx
+
+        inc esi
+        cmp esi, 3
+        jne pushBackgroundColorsLoop
+    push renderer
+    call SDL_SetRenderDrawColor
+    add esp, 20
