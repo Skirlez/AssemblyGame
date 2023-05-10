@@ -18,8 +18,7 @@ extern "C" void deleteSDLRect(SDL_Rect* rect) {
 extern "C" int distanceBetweenPoints(int x1, int y1, int x2, int y2) {
 	return static_cast<int>(sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2)));
 }
-int main(int argc, char* argv[])
-{
+int main(int argc, char* argv[]) {
 	asmMain();
 	return 0;
 }

@@ -14,7 +14,7 @@ extern createSDLRect: PROC
 extern deleteSDLRect: PROC
 extern distanceBetweenPoints: PROC
 
-; std functions
+; cstd functions
 extern srand: PROC
 extern rand: PROC
 
@@ -58,10 +58,13 @@ extern Mix_FreeMusic: PROC
 extern Mix_CloseAudio: PROC
 extern Mix_Quit: PROC
 ; game constants
-SLIDER_SPEED = 2 ; the amount of pixels the slider moves every frame (0 - very sad slider)
+SLIDER_SPEED = 1 ; the amount of pixels the slider moves every frame (0 - very sad slider)
+SLIDER_FRAC_TOP = 6
+SLIDER_FRAC_BOTTOM = 5 ; slider speed is multiplied by (SLIDER_FRAC_TOP/SLIDER_FRAC_BOTTOM)
 COOL_COLORS = 0 ; whether to generate two colors every round (0 - no, 1 - yes please)
 STREAKS_AMOUNT = 10 ; the number of streaks to have on screen (0 - disable)
 CIRCLE_AMOUNT = 3; the amount of circles to create per round (0 - disable)
+LEVERS_AMOUNT = 3; the amount of levers to have
 
 ; SDL constant stuff
 SDL_INIT_EVERYTHING = 62001
@@ -103,10 +106,9 @@ MIX_DEFAULT_FORMAT = 32784
     sliderDrawPos dw 0
     sliderDragged db 0
 
-    levers db 1 ; levers enabled
-    levers_state db 3 dup (0)
-    levers_light db 3 dup (0)
-
+    levers_state db LEVERS_AMOUNT dup (0)
+    levers_light db LEVERS_AMOUNT dup (0)
+    levers_starting_x dw 0
 
     mousePressed db 0
     mouseReleased db 0
@@ -142,12 +144,13 @@ MIX_DEFAULT_FORMAT = 32784
     renderer dword 0
     gameName db "AssemblyGame", 0
 
-    ; music definitions
     gameMusicStartPath db ".\\Assets\\Sounds\\musicstart.wav", 0
     gameMusicPath db ".\\Assets\\Sounds\\music.wav", 0
     winMusicPath db ".\\Assets\\Sounds\\win.wav", 0
     gameOverMusicPath db ".\\Assets\\Sounds\\gameover.wav", 0
     
+
+    ; music definitions
     gameMusicStart dword ?
     gameMusic dword ?
     winMusic dword ?
@@ -362,6 +365,17 @@ asmMain PROC
         cmp esi, SOUND_COUNT
         jne loadSoundsLoop
 
+    ; store the starting position of the first lever
+    mov edx, 0
+    mov eax, 50
+    mov ebx, LEVERS_AMOUNT
+    sub ebx, 1
+    mul ebx
+    mov ecx, eax
+    mov eax, 640
+    sub eax, ecx
+    mov levers_starting_x, ax
+
     call getTime
     mov startTime, eax
 
@@ -381,8 +395,6 @@ asmMain PROC
 
     sub eax, startTime
     sub eax, ecx
-
-
 
     cmp eax, 16666666
     jl gameLoop
@@ -426,16 +438,24 @@ asmMain PROC
             mov timer, 405
             mov fullTimer, 5805
         afterInitTimer:
-        mov esi, 0
 
+        mov esi, 0
         initResetArraysLoop:
             mov [fullTimerColors + esi], 255
-            mov [levers_state + esi], 0
-            mov [levers_light + esi], 0
             inc esi
             cmp esi, 3
             jne initResetArraysLoop
 
+        mov esi, 0
+        cmp esi, LEVERS_AMOUNT
+        je afterResetLevers
+        initResetLeversLoop:
+            mov [levers_state + esi], 0
+            mov [levers_light + esi], 0
+            inc esi
+            cmp esi, LEVERS_AMOUNT
+            jne initResetLeversLoop
+        afterResetLevers:
         mov sliderPos, 0
         mov sliderDrawPos, 0
         mov sliderDragged, 0
@@ -612,11 +632,12 @@ asmMain PROC
         mov goodColorIndex, dl
         skipNewColors:
         
+            
 
-        cmp levers, 0
-        je afterNewLeverLights
 
         mov esi, 0
+        cmp esi, LEVERS_AMOUNT
+        je afterNewLeverLights
         leverLightsCheck:
             mov al, [levers_light + esi]
             mov ah, [levers_state + esi]
@@ -624,7 +645,7 @@ asmMain PROC
             cmp al, ah
             jne loseLabel
             inc esi
-            cmp esi, 3
+            cmp esi, LEVERS_AMOUNT
             jne leverLightsCheck
         mov esi, 0
         newLeverLightsLoop:
@@ -641,7 +662,7 @@ asmMain PROC
            
 
             inc esi
-            cmp esi, 3
+            cmp esi, LEVERS_AMOUNT
             jne newLeverLightsLoop
 
         afterNewLeverLights:
@@ -1024,9 +1045,9 @@ asmMain PROC
             mov eax, 0
             mov edx, 0
             mov ax, sliderPos
-            mov ebx, 5
+            mov ebx, SLIDER_FRAC_TOP
             mul ebx
-            mov ebx, 7
+            mov ebx, SLIDER_FRAC_BOTTOM
             div ebx        
 
             add eax, 100
@@ -1049,8 +1070,14 @@ asmMain PROC
             jmp slideDragHandling
         afterSlideClick:
         
+        mov edx, 0
+        mov eax, 500
+        mov ebx, SLIDER_FRAC_BOTTOM
+        mul ebx
+        mov ebx, SLIDER_FRAC_TOP
+        div ebx
 
-        cmp sliderPos, 700
+        cmp sliderPos, ax
         jl afterSlideHandling
         jmp loseLabel
 
@@ -1070,11 +1097,18 @@ asmMain PROC
         skipSliderSound:
         mov edx, 0
         mov eax, mouseY
-        mov ebx, 7
+        sub eax, 100
+        cmp eax, 0
+        jg afterGetMouseY
+        mov eax, 0
+        afterGetMouseY:
+
+
+        mov ebx, SLIDER_FRAC_BOTTOM
         mul ebx
-        mov ebx, 5
+        mov ebx, SLIDER_FRAC_TOP ; we multiply by the 1/(SLIDER_FRAC_TOP/SLIDER_FRAC_BOTTOM) to fix the mouse position
         div ebx        
-        sub eax, 130
+        
 
         cmp ax, sliderPos
         jg afterSlideHandling
@@ -1105,9 +1139,9 @@ asmMain PROC
     mov eax, 0
     mov edx, 0
     mov ax, sliderPos
-    mov ebx, 5
+    mov ebx, SLIDER_FRAC_TOP
     mul ebx
-    mov ebx, 7
+    mov ebx, SLIDER_FRAC_BOTTOM
     div ebx        
     add eax, 100
     push eax
@@ -1198,7 +1232,7 @@ asmMain PROC
         jg bonusNodeSkipNeg
             neg eax
         bonusNodeSkipNeg:
-        cmp eax, 100
+        cmp eax, 150
         jg afterBonusNodeHandle
 
         xor bonusNodeState, 1
@@ -1225,7 +1259,7 @@ asmMain PROC
         add esp, 20
 
     bonusNodeSkipGreen:
-    push 350
+    push 300
     push 150
     push 450
     push 150
@@ -1250,7 +1284,7 @@ asmMain PROC
 
     push 450
     push 150
-    push 550
+    push 600
     push 150
     push renderer
     call SDL_RenderDrawLine
@@ -1276,7 +1310,7 @@ asmMain PROC
     ; are on top of the levers, but you don't accidentally click a lever while trying to click a circle
     mov al, 0
     cmp al, CIRCLE_AMOUNT
-    je afterCircleDraw
+    je afterClick
     cmp mousePressed, 0
     je afterClick
     cmp gameState, 2
@@ -1328,8 +1362,6 @@ asmMain PROC
 
 
     ; lever handling
-    cmp levers, 0
-    je afterLeverDraw
     cmp mousePressed, 1 
     jne afterLeverHandle
     cmp gameState, 2
@@ -1337,11 +1369,13 @@ asmMain PROC
 
 
     mov esi, 0
+    cmp esi, LEVERS_AMOUNT
+    je afterLeverDraw
     handleLeverLoop:
         mov edx, 0
         mov eax, 100
         mul esi
-        add eax, 540
+        add ax, levers_starting_x
 
         push esi
 
@@ -1367,7 +1401,7 @@ asmMain PROC
         
 
         inc esi
-        cmp esi, 3
+        cmp esi, LEVERS_AMOUNT
         jne handleLeverLoop
 
 
@@ -1378,6 +1412,8 @@ asmMain PROC
 
     ; lever drawing
     mov esi, 0
+    cmp esi, LEVERS_AMOUNT
+    je afterLeverDraw
     drawLeverLoop:
         push esi
 
@@ -1390,7 +1426,7 @@ asmMain PROC
         mov edx, 0
         mov eax, 100
         mul esi
-        add eax, 540
+        add ax, levers_starting_x
 
         push eax
         push eax
@@ -1468,7 +1504,7 @@ asmMain PROC
             
 
         inc esi
-        cmp esi, 3
+        cmp esi, LEVERS_AMOUNT
         jne drawLeverLoop
 
     afterLeverDraw:
@@ -1481,6 +1517,8 @@ asmMain PROC
     jne afterCircleDraw
     ; drawing the circles
     mov esi, 0
+    cmp esi, CIRCLE_AMOUNT
+    je afterCircleDraw
     drawCirclesLoop:
         
         
@@ -1666,6 +1704,8 @@ asmMain PROC
     call Mix_Quit
     call IMG_Quit
     call SDL_Quit
+
+
     ret
 asmMain ENDP
 
